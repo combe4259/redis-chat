@@ -72,7 +72,7 @@ middleware = [
                allow_headers=['*'])
 ]
 
-app = Starlette(
+application= Starlette(
     routes=routes,
     on_startup=[broadcast.connect],
     on_shutdown=[broadcast.disconnect],

@@ -1,1 +1,1 @@
-web: uvicorn application:app port8000 host0.0.0.0 proxyheaders forwardedallowips*
+web: uvicorn application:application --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'
