@@ -1,224 +1,200 @@
-<html>
-
+<!DOCTYPE html>
+<html lang="ko">
 <head>
-    <script src='//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js'></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoreDot Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
     <script>
         $(document).ready(function () {
+            // 초기 상태 설정
             if (typeof WebSocket != 'undefined') {
-                $('#ask').show();
+                $('#login-screen').removeClass('hidden');
             } else {
-                $('#error').show();
+                $('#error-screen').removeClass('hidden');
             }
 
-            // join on enter
-            $('#ask input').keydown(function (event) {
+            // 닉네임 입력 후 엔터
+            $('#nickname-input').keydown(function (event) {
                 if (event.keyCode == 13) {
-                    $('#ask a').click();
+                    $('#join-btn').click();
                 }
             })
 
-            // join on click
-            $('#ask a').click(function () {
-                join($('#ask input').val());
-                $('#ask').hide();
-                $('#channel').show();
-                $('input#message').focus();
+            // 입장 버튼 클릭
+            $('#join-btn').click(function () {
+                var nickname = $('#nickname-input').val().trim();
+                if(nickname) {
+                    join(nickname);
+                    $('#login-screen').addClass('hidden');
+                    $('#chat-screen').removeClass('hidden');
+                    $('#message-input').focus();
+                }
             });
 
             function join(name) {
-                // var host = window.location.host.split(':')[0];
                 var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
                 var ws_path = ws_scheme + '://' + window.location.host;
                 var ws = new WebSocket(ws_path);
 
-                var container = $('div#msgs');
+                var container = $('#message-list');
+                
                 ws.onmessage = function (evt) {
                     var obj = JSON.parse(evt.data);
                     if (typeof obj != 'object') return;
 
                     var action = obj['action'];
-                    var struct = container.find('li.' + action + ':first');
-                    if (struct.length < 1) {
-                        console.log("Could not handle: " + evt.data);
-                        return;
-                    }
-
-                    var msg = struct.clone();
-                    msg.find('.time').text((new Date()).toString("HH:mm:ss"));
+                    var msgHtml = '';
+                    var time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 
                     if (action == 'message') {
-                        var matches;
-                        if (matches = obj['message'].match(/^\s*[\/\\]me\s(.*)/)) {
-                            msg.find('.user').text(obj['user'] + ' ' + matches[1]);
-                            msg.find('.user').css('font-weight', 'bold');
+                        var isMe = obj['user'] == name;
+                        
+                        // /me 명령어가 있는지 확인 (예: "/me 님이 춤을 춥니다")
+                        var meMatch = obj['message'].match(/^\s*[\/\\]me\s(.*)/);
+
+                        if (meMatch) {
+                            // 시스템 메시지처럼 처리 (/me)
+                            msgHtml = `
+                                <div class="flex justify-center my-2">
+                                    <span class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                                        <strong>${obj['user']}</strong> ${meMatch[1]}
+                                    </span>
+                                </div>`;
                         } else {
-                            msg.find('.user').text(obj['user']);
-                            msg.find('.message').text(': ' + obj['message']);
+                            // 일반 채팅 메시지
+                            if (isMe) {
+                                // 나 (오른쪽)
+                                msgHtml = `
+                                    <div class="flex justify-end mb-4">
+                                        <div class="flex flex-col items-end max-w-[70%]">
+                                            <div class="bg-blue-500 text-white px-4 py-2 rounded-2xl rounded-tr-none shadow-sm text-sm">
+                                                ${obj['message']}
+                                            </div>
+                                            <span class="text-xs text-gray-400 mt-1">${time}</span>
+                                        </div>
+                                    </div>`;
+                            } else {
+                                // 상대방 (왼쪽)
+                                msgHtml = `
+                                    <div class="flex justify-start mb-4">
+                                        <div class="flex flex-col items-start max-w-[70%]">
+                                            <span class="text-xs text-gray-600 mb-1 font-semibold ml-1">${obj['user']}</span>
+                                            <div class="bg-white border border-gray-200 text-gray-800 px-4 py-2 rounded-2xl rounded-tl-none shadow-sm text-sm">
+                                                ${obj['message']}
+                                            </div>
+                                            <span class="text-xs text-gray-400 mt-1 ml-1">${time}</span>
+                                        </div>
+                                    </div>`;
+                            }
                         }
                     } else if (action == 'control') {
-                        msg.find('.user').text(obj['user']);
-                        msg.find('.message').text(obj['message']);
-                        msg.addClass('control');
+                        // 입장/퇴장 등 시스템 메시지
+                        msgHtml = `
+                            <div class="flex justify-center my-4">
+                                <span class="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                                    ${obj['user']} ${obj['message']}
+                                </span>
+                            </div>`;
                     }
 
-                    if (obj['user'] == name) msg.find('.user').addClass('self');
-                    container.find('ul').append(msg.show());
-                    container.scrollTop(container.find('ul').innerHeight());
+                    container.append(msgHtml);
+                    // 스크롤 맨 아래로
+                    var scrollContainer = document.getElementById("scroll-container");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
                 }
 
-                $('#channel form').submit(function (event) {
+                // 메시지 전송
+                $('#chat-form').submit(function (event) {
                     event.preventDefault();
-                    var input = $(this).find(':input');
+                    var input = $('#message-input');
                     var msg = input.val();
                     if (msg) {
                         ws.send(JSON.stringify({ action: 'message', user: name, message: msg }));
+                        input.val('');
                     }
-                    input.val('');
                 });
             }
         });
     </script>
-    <style type="text/css" media="screen">
-        * {
-            font-family: Georgia;
-        }
-
-        a {
-            color: #000;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        div.bordered {
-            margin: 0 auto;
-            margin-top: 100px;
-            width: 600px;
-            padding: 20px;
-            text-align: center;
-            border: 10px solid #ddd;
-            -webkit-border-radius: 20px;
-        }
-
-        #error {
-            background-color: #BA0000;
-            color: #fff;
-            font-weight: bold;
-        }
-
-        #ask {
-            font-size: 20pt;
-        }
-
-        #ask input {
-            font-size: 20pt;
-            padding: 10px;
-            margin: 0 10px;
-        }
-
-        #ask span.join {
-            padding: 10px;
-            background-color: #ddd;
-            -webkit-border-radius: 10px;
-        }
-
-        #channel {
-            margin-top: 100px;
-            height: 480px;
-            position: relative;
-        }
-
-        #channel div#descr {
-            position: absolute;
-            left: -10px;
-            top: -190px;
-            font-size: 13px;
-            text-align: left;
-            line-height: 20px;
-            padding: 5px;
-            width: 630px;
-        }
-
-        div#msgs {
-            overflow-y: scroll;
-            height: 400px;
-        }
-
-        div#msgs ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            text-align: left;
-        }
-
-        div#msgs li {
-            line-height: 20px;
-        }
-
-        div#msgs li span.user {
-            color: #ff9900;
-        }
-
-        div#msgs li span.user.self {
-            color: #aa2211;
-        }
-
-        div#msgs li span.time {
-            float: right;
-            margin-right: 5px;
-            color: #aaa;
-            font-family: "Courier New";
-            font-size: 12px;
-        }
-
-        div#msgs li.control {
-            text-align: center;
-        }
-
-        div#msgs li.control span.message {
-            color: #aaa;
-        }
-
-        div#input {
-            text-align: left;
-            margin-top: 20px;
-        }
-
-        div#input #message {
-            width: 600px;
-            border: 5px solid #bbb;
-            -webkit-border-radius: 3px;
-            font-size: 30pt;
-        }
-    </style>
 </head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
 
-<body>
-    <div id="error" class="bordered" style="display: none;">
-        This browser has no native WebSocket support.<br />
-        Use a WebKit nightly or Google Chrome.
+    <!-- 에러 화면 -->
+    <div id="error-screen" class="hidden text-center p-6 bg-white rounded-lg shadow-xl">
+        <h2 class="text-xl font-bold text-red-500 mb-2">오류 발생</h2>
+        <p class="text-gray-600">이 브라우저는 WebSocket을 지원하지 않습니다.<br>Chrome 브라우저를 사용해주세요.</p>
     </div>
-    <div id="ask" class="bordered" style="display: none;">
-        닉네임: <input type="text" id="name" /> <a href="#"><span class="join">들어가기</span></a>
+
+    <!-- 로그인 화면 -->
+    <div id="login-screen" class="hidden w-full max-w-md p-8 bg-white rounded-2xl shadow-xl mx-4">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800">CoreDot Chat</h1>
+            <p class="text-gray-500 mt-2 text-sm">입장할 닉네임을 설정해주세요</p>
+        </div>
+        <div class="space-y-4">
+            <input type="text" id="nickname-input" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="닉네임 입력" autofocus>
+            <button id="join-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md transform hover:-translate-y-0.5">
+                채팅 시작하기
+            </button>
+        </div>
     </div>
-    <div id="channel" class="bordered" style="display: none;">
-        <div id="descr" class="bordered">
-            <strong><a href="https://github.com/CoreDotToday/coredot-chat-demo" target="_blank">coredot-chat-demo</a> : </strong> 헤더 없이는 데모로 작동합니다. 여러 개의 브라우저에서 계정 테스트를 수행하세요.
+
+    <!-- 채팅 화면 -->
+    <div id="chat-screen" class="hidden w-full max-w-lg h-[90vh] md:h-[800px] bg-gray-50 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative">
+        <!-- 헤더 -->
+        <header class="bg-white p-4 border-b border-gray-100 flex items-center justify-between shadow-sm z-10">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-tr from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                    C
+                </div>
+                <div>
+                    <h1 class="font-bold text-gray-800 text-lg">CoreDot Chat</h1>
+                    <div class="flex items-center space-x-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                        <span class="text-xs text-gray-500">온라인</span>
+                    </div>
+                </div>
+            </div>
+            <a href="https://github.com/CoreDotToday/coredot-chat-demo" target="_blank" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
+            </a>
+        </header>
+
+        <!-- 메시지 영역 -->
+        <div id="scroll-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5]">
+            <div id="message-list" class="flex flex-col">
+                <!-- 메시지가 동적으로 추가됩니다 -->
+                <div class="flex justify-center my-4">
+                    <span class="text-xs text-gray-400 bg-gray-200/50 px-3 py-1 rounded-full">
+                        채팅방에 연결되었습니다.
+                    </span>
+                </div>
+            </div>
         </div>
-        <div id="msgs">
-            <ul>
-                <li class="message" style="display: none">
-                    <span class="user"></span><span class="message"></span>
-                    <span class="time"></span>
-                </li>
-            </ul>
-        </div>
-        <div id="input">
-            <form><input type="text" id="message" /></form>
+
+        <!-- 입력 영역 -->
+        <div class="bg-white p-4 border-t border-gray-100">
+            <form id="chat-form" class="flex items-center space-x-2">
+                <input type="text" id="message-input" class="flex-1 bg-gray-100 text-gray-800 placeholder-gray-400 border-0 rounded-full px-5 py-3 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:outline-none transition-all" placeholder="메시지를 입력하세요..." autocomplete="off">
+                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 shadow-md transition duration-200 flex-shrink-0">
+                    <svg class="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
+            </form>
         </div>
     </div>
 </body>
-
 </html>
