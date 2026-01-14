@@ -62,7 +62,9 @@ routes = [
 
 origins = [
     "http://localhost",
-    "http://localhost:8000"
+    "http://localhost:8000",
+    "http://www.fromisus.store",
+    "https://www.fromisus.store"
 ]
 
 middleware = [
