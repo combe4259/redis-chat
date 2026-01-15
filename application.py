@@ -7,6 +7,8 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+import json
+import aiohttp
 
 
 load_dotenv()  # Load .env variables
@@ -50,9 +52,23 @@ async def chatroom_ws_sender(websocket, channel_name):
         print("WS Sender: Subscribed to channel")
         async for event in subscriber:
             print(f"WS Sender: Got event from Redis: {event.message}")
-            await websocket.send_text(
-                event.message
-            )
+            await websocket.send_text(event.message)
+
+            # 봇 응답 처리
+            await websocket.send_text('{"action":"message","user":"안내","message":"Claude가 입력 중입니다..."}')
+
+            # API Gateway 호출 (Bedrock Claude)
+            params = {"m": json.loads(event.message)['message']}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://wjd36tvv38.execute-api.ap-northeast-2.amazonaws.com/default/test-lambda",
+                    params=params
+                ) as resp:
+                    r = await resp.json()
+                    # Bedrock Claude 응답은 body에 직접 텍스트가 있음
+                    bot_message = r.get('body', str(r))
+                    bot_message_json = json.dumps(bot_message, ensure_ascii=False)
+                    await websocket.send_text(f'{{"action":"message","user":"Bedrock Claude","message":{bot_message_json}}}')
 
 
 routes = [
