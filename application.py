@@ -13,15 +13,9 @@ import aiohttp
 
 load_dotenv()  # Load .env variables
 
-if os.environ.get("ENV_STATE") == "prod":
-    print("Production mode")
-    redis_url = "redis://"+os.environ.get('REDIS_HOST')+":6379"
-    broadcast = Broadcast(redis_url)
-else:
-    print("Development mode")
-    redis_url = "redis://127.0.0.1:6379"
-    broadcast = Broadcast(redis_url)
-print(f"Connecting to Redis at: {redis_url}")
+# 메모리 broadcast 사용 (Redis 없이)
+broadcast = Broadcast("memory://")
+print("Using in-memory broadcast")
 templates = Jinja2Templates("templates")
 
 
